@@ -10,7 +10,13 @@
 
 // ============================================================================
 
+// the name of the window class required by the WINAPI.
 static const auto CLASS_NAME = "DX12-SANDBOX-WC";
+
+// the initial width of the window.
+static const auto WIDTH = 800;
+// the initial height of the window.
+static const auto HEIGHT = 600;
 
 // ============================================================================
 
@@ -68,12 +74,54 @@ void unregisterWindowClass()
 
 // ============================================================================
 
+HWND createWindow()
+{
+  // construct a new window with the desired definitions.
+  HWND hwnd = CreateWindowEx(
+    WS_EX_CLIENTEDGE,
+    CLASS_NAME,
+    "DirectX 12 - Sandbox",
+    WS_OVERLAPPEDWINDOW,
+    CW_USEDEFAULT,
+    CW_USEDEFAULT,
+    WIDTH,
+    HEIGHT,
+    nullptr,
+    nullptr,
+    GetModuleHandle(nullptr),
+    nullptr);
+
+  // check how the operation succeeded.
+  if (hwnd == nullptr) {
+    std::cout << "CreateWindowEx: " << GetLastError() << std::endl;
+    throw new std::runtime_error("Window creation failed");
+  }
+
+  // operation succeeded...
+  return hwnd;
+}
+
+// ============================================================================
+
+void destroyWindow(HWND hwnd)
+{
+  // try to destroy the given window and check results.
+  if (DestroyWindow(hwnd) == 0) {
+    std::cout << "DestroyWindow: " << GetLastError() << std::endl;
+    throw new std::runtime_error("Window destruction failed");
+  }
+}
+
+// ============================================================================
+
 int main()
 {
   registerWindowClass();
-
+  auto hwnd = createWindow();
+  
   // TODO ...
 
+  destroyWindow(hwnd);
   unregisterWindowClass();
   return 0;
 }
