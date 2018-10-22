@@ -1,12 +1,23 @@
 // include windows headers without unnecessary APIs.
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <wrl.h>
 
-// include the main DirectX header.
+// include the required DirectX headers.
 #include <d3d12.h>
+#include <dxgi1_6.h>
 
 // include support for I/O streams.
 #include <iostream>
+
+// ============================================================================
+
+#pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxgi.lib")
+
+// ============================================================================
+
+using namespace Microsoft::WRL;
 
 // ============================================================================
 
@@ -114,10 +125,82 @@ void destroyWindow(HWND hwnd)
 
 // ============================================================================
 
+void enableDXDebugging()
+{
+  // try to catch a reference to the DX12 debug layer.
+  ComPtr<ID3D12Debug> debug;
+  auto result = D3D12GetDebugInterface(IID_PPV_ARGS(&debug));
+  if (FAILED(result)) {
+    std::cout << "D3D12GetDebugInterface: " << result << std::endl;
+    throw new std::runtime_error("Failed to access DX12 debug layer");
+  }
+
+  // enable the debugging layer.
+  debug->EnableDebugLayer();
+}
+
+// ============================================================================
+
+ComPtr<IDXGIAdapter4> selectDXGIAdapter()
+{
+  // specify debug flag when building in a debug mode.
+  auto flags = 0u;
+  #if defined(_DEBUG)
+  flags = DXGI_CREATE_FACTORY_DEBUG;
+  #endif
+
+  // try to create a factory for DXGI instances.
+  ComPtr<IDXGIFactory4> factory;
+  auto result = CreateDXGIFactory2(flags, IID_PPV_ARGS(&factory));
+  if (FAILED(result)) {
+    std::cout << "CreateDXGIFactory2: " << result << std::endl;
+    throw new std::runtime_error("DXGI factory creation failed");
+  }
+
+  // enumerate adapters and find the one with most dedicated video memory.
+  auto maxVideoMemory = 0u;
+  ComPtr<IDXGIAdapter1> adapter1;
+  ComPtr<IDXGIAdapter4> adapter4;
+  for (auto i = 0u; factory->EnumAdapters1(i, &adapter1) != DXGI_ERROR_NOT_FOUND; ++i) {
+    // get the adapter descriptor info item.
+    DXGI_ADAPTER_DESC1 descriptor;
+    adapter1->GetDesc1(&descriptor);
+
+    // skip software emulation based adapters.
+    if ((descriptor.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0)
+      continue;
+
+    // skip adapters that cannot be created.
+    if (FAILED(D3D12CreateDevice(adapter1.Get(), D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), nullptr)))
+      continue;
+
+    // skip adapters which have less memory than the current maximum.
+    if (descriptor.DedicatedVideoMemory < maxVideoMemory)
+      continue;
+
+    // we found a good candidate as the selected adapter.
+    result = adapter1.As(&adapter4);
+    if (FAILED(result)) {
+      std::cout << "IDXGIAdapter1.As: " << result << std::endl;
+      throw new std::runtime_error("Failed to cast DXGIAdapter1 to DXGIAdapter4");
+    }
+  }
+
+  // return the result.
+  return adapter4;
+}
+
+// ============================================================================
+
 int main()
 {
+  #if defined(_DEBUG)
+  enableDXDebugging();
+  #endif
+
   registerWindowClass();
   auto hwnd = createWindow();
+  auto adapter = selectDXGIAdapter();
   
   // TODO ...
 
