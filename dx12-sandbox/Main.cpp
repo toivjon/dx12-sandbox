@@ -9,6 +9,7 @@
 
 // include support for I/O streams.
 #include <iostream>
+#include <vector>
 
 // ============================================================================
 
@@ -192,6 +193,56 @@ ComPtr<IDXGIAdapter4> selectDXGIAdapter()
 
 // ============================================================================
 
+ComPtr<ID3D12Device> createDXDevice(ComPtr<IDXGIAdapter4> adapter)
+{
+  // try to create a new DX12 device from the provided adapter.
+  ComPtr<ID3D12Device2> device;
+  auto result = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device));
+  if (FAILED(result)) {
+    std::cout << "D3D12CreateDevice: " << result << std::endl;
+    throw new std::runtime_error("Failed to create DX12 device");
+  }
+
+  #if defined(_DEBUG)
+  // try to access the DX12 device info queue.
+  ComPtr<ID3D12InfoQueue> infoQueue;
+  if (SUCCEEDED(device.As(&infoQueue))) {
+    // tell queue that we want to break when something goes wrong.
+    infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
+    infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
+    infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
+
+    // create an array of severity levels to be ignored.
+    std::vector<D3D12_MESSAGE_SEVERITY> severities = { D3D12_MESSAGE_SEVERITY_INFO };
+
+    // create an array to ignore non-critical warnings.
+    std::vector<D3D12_MESSAGE_ID> deniedIds = {
+      D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE,
+      D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,
+      D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE
+    };
+
+    // construct a queue filter to ignore certain severity levels and warnings.
+    D3D12_INFO_QUEUE_FILTER filter = {};
+    filter.DenyList.NumSeverities = severities.size();
+    filter.DenyList.pSeverityList = &severities[0];
+    filter.DenyList.NumIDs = deniedIds.size();
+    filter.DenyList.pIDList = &deniedIds[0];
+
+    // try to activate the created queue filter.
+    result = infoQueue->PushStorageFilter(&filter);
+    if (FAILED(result)) {
+      std::cout << "infoQueue->PushStorageFilter: " << result << std::endl;
+      throw new std::runtime_error("Failed to activate DX12 info queue filter");
+    }
+  }
+  #endif
+
+  return device;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -201,6 +252,7 @@ int main()
   registerWindowClass();
   auto hwnd = createWindow();
   auto adapter = selectDXGIAdapter();
+  auto device = createDXDevice(adapter);
   
   // TODO ...
 
