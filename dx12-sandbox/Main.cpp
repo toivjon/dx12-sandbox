@@ -265,6 +265,57 @@ ComPtr<ID3D12CommandQueue> createDXCommandQueue(ComPtr<ID3D12Device> device)
 
 // ============================================================================
 
+ComPtr<IDXGISwapChain4> createDXGISwapChain(HWND hwnd, ComPtr<ID3D12CommandQueue> commandQueue)
+{
+  // specify debug flag when building in a debug mode.
+  auto flags = 0u;
+  #if defined(_DEBUG)
+  flags = DXGI_CREATE_FACTORY_DEBUG;
+  #endif
+
+  // try to create a factory for DXGI instances.
+  ComPtr<IDXGIFactory4> factory;
+  auto result = CreateDXGIFactory2(flags, IID_PPV_ARGS(&factory));
+  if (FAILED(result)) {
+    std::cout << "CreateDXGIFactory2: " << result << std::endl;
+    throw new std::runtime_error("DXGI factory creation failed");
+  }
+
+  // create a descriptor for the swap chain.
+  DXGI_SWAP_CHAIN_DESC1 descriptor = {};
+  descriptor.Width = WIDTH;
+  descriptor.Height = HEIGHT;
+  descriptor.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  descriptor.Stereo = false;
+  descriptor.SampleDesc = { 1, 0 };
+  descriptor.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+  descriptor.BufferCount = 2;
+  descriptor.Scaling = DXGI_SCALING_STRETCH;
+  descriptor.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+  descriptor.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+  descriptor.Flags = 0;
+
+  // try to create the swap chain.
+  ComPtr<IDXGISwapChain1> swapChain;
+  result = factory->CreateSwapChainForHwnd(commandQueue.Get(), hwnd, &descriptor, nullptr, nullptr, &swapChain);
+  if (FAILED(result)) {
+    std::cout << "factory->CreateSwapChainForHwnd: " << result << std::endl;
+    throw new std::runtime_error("Failed to create DXGI swap chain");
+  }
+
+  // cast the created swap chain into correct version.
+  ComPtr<IDXGISwapChain4> swapChain4;
+  result = swapChain.As(&swapChain4);
+  if (FAILED(result)) {
+    std::cout << "swapChain.As: " << result << std::endl;
+    throw new std::runtime_error("Failed to cast DXGISwapChain1 to DXGISwapChain4");
+  }
+
+  return swapChain4;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -276,6 +327,7 @@ int main()
   auto adapter = selectDXGIAdapter();
   auto device = createDXDevice(adapter);
   auto commandQueue = createDXCommandQueue(device);
+  auto swapChain = createDXGISwapChain(hwnd, commandQueue);
   
   // TODO ...
 
