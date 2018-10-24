@@ -243,6 +243,28 @@ ComPtr<ID3D12Device> createDXDevice(ComPtr<IDXGIAdapter4> adapter)
 
 // ============================================================================
 
+ComPtr<ID3D12CommandQueue> createDXCommandQueue(ComPtr<ID3D12Device> device)
+{
+  // create a descriptor for the command queue.
+  D3D12_COMMAND_QUEUE_DESC descriptor = {};
+  descriptor.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+  descriptor.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+  descriptor.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+  descriptor.NodeMask = 0;
+
+  // try to create a new command queue for the target device.
+  ComPtr<ID3D12CommandQueue> commandQueue;
+  auto result = device->CreateCommandQueue(&descriptor, IID_PPV_ARGS(&commandQueue));
+  if (FAILED(result)) {
+    std::cout << "device->CreateCommandQueue: " << result << std::endl;
+    throw new std::runtime_error("Failed to create command queue");
+  }
+
+  return commandQueue;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -253,6 +275,7 @@ int main()
   auto hwnd = createWindow();
   auto adapter = selectDXGIAdapter();
   auto device = createDXDevice(adapter);
+  auto commandQueue = createDXCommandQueue(device);
   
   // TODO ...
 
