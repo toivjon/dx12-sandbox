@@ -30,6 +30,9 @@ static const auto WIDTH = 800;
 // the initial height of the window.
 static const auto HEIGHT = 600;
 
+// the amount of swap chain buffers.
+static const auto BUFFER_COUNT = 2;
+
 // ============================================================================
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -289,7 +292,7 @@ ComPtr<IDXGISwapChain4> createDXGISwapChain(HWND hwnd, ComPtr<ID3D12CommandQueue
   descriptor.Stereo = false;
   descriptor.SampleDesc = { 1, 0 };
   descriptor.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-  descriptor.BufferCount = 2;
+  descriptor.BufferCount = BUFFER_COUNT;
   descriptor.Scaling = DXGI_SCALING_STRETCH;
   descriptor.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
   descriptor.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
@@ -316,6 +319,26 @@ ComPtr<IDXGISwapChain4> createDXGISwapChain(HWND hwnd, ComPtr<ID3D12CommandQueue
 
 // ============================================================================
 
+ComPtr<ID3D12DescriptorHeap> createDXDescriptorHeap(ComPtr<ID3D12Device> device, D3D12_DESCRIPTOR_HEAP_TYPE type)
+{
+  // create a descriptor for the descriptor heap.
+  D3D12_DESCRIPTOR_HEAP_DESC descriptor = {};
+  descriptor.NumDescriptors = BUFFER_COUNT;
+  descriptor.Type = type;
+
+  // try to create the descriptor heap.
+  ComPtr<ID3D12DescriptorHeap> descriptorHeap;
+  auto result = device->CreateDescriptorHeap(&descriptor, IID_PPV_ARGS(&descriptorHeap));
+  if (FAILED(result)) {
+    std::cout << "device->CreateDescriptorHeap: " << result << std::endl;
+    throw new std::runtime_error("Failed to create descriptor heap");
+  }
+
+  return descriptorHeap;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -328,6 +351,7 @@ int main()
   auto device = createDXDevice(adapter);
   auto commandQueue = createDXCommandQueue(device);
   auto swapChain = createDXGISwapChain(hwnd, commandQueue);
+  auto descriptorHeap = createDXDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   
   // TODO ...
 
