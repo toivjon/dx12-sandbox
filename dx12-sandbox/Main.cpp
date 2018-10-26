@@ -369,6 +369,21 @@ ComPtr<ID3D12GraphicsCommandList> createDXCommandList(ComPtr<ID3D12Device> devic
 
 // ============================================================================
 
+ComPtr<ID3D12Fence> createDXFence(ComPtr<ID3D12Device> device)
+{
+  // try to create a new fence for the target device.
+  ComPtr<ID3D12Fence> fence;
+  auto result = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+  if (FAILED(result)) {
+    std::cout << "device->CreateFence: " << result << std::endl;
+    throw new std::runtime_error("Failed to create a new fence");
+  }
+
+  return fence;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -384,6 +399,7 @@ int main()
   auto descriptorHeap = createDXDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   auto commandAllocator = createDXCommandAllocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
   auto commandList = createDXCommandList(device, commandAllocator);
+  auto fence = createDXFence(device);
   
   // TODO ...
 
