@@ -8,6 +8,7 @@
 #include <dxgi1_6.h>
 
 // include support for I/O streams.
+#include <chrono>
 #include <iostream>
 #include <vector>
 
@@ -19,6 +20,7 @@
 // ============================================================================
 
 using namespace Microsoft::WRL;
+using namespace std::chrono;
 
 // ============================================================================
 
@@ -393,6 +395,24 @@ HANDLE createEvent()
   }
 
   return event;
+}
+
+// ============================================================================
+
+void waitFence(ComPtr<ID3D12Fence> fence, uint64_t fenceValue, HANDLE event, milliseconds duration)
+{
+  if (fence->GetCompletedValue() < fenceValue)
+  {
+    // specify which event to trigger after fence has been finished.
+    auto result = fence->SetEventOnCompletion(fenceValue, event);
+    if (FAILED(result)) {
+      std::cout << "fence->SetEventOnCompletion: " << result << std::endl;
+      throw new std::runtime_error("Failed to set event for fence completion");
+    }
+
+    // wait for a signal or until the given duration has elapsed.
+    WaitForSingleObject(event, static_cast<DWORD>(duration.count()));
+  }
 }
 
 // ============================================================================
