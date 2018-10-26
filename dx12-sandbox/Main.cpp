@@ -3,11 +3,22 @@
 #include <Windows.h>
 #include <wrl.h>
 
+// undefine min macro and use the std::max from the <algorithm>
+#if defined(min)
+#undef min
+#endif
+
+// undefine max macro and use the std::max from the <algorithm>
+#if defined(max)
+#undef max
+#endif
+
 // include the required DirectX headers.
 #include <d3d12.h>
 #include <dxgi1_6.h>
 
 // include support for I/O streams.
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <vector>
@@ -434,6 +445,14 @@ uint64_t signalFence(ComPtr<ID3D12CommandQueue> commandQueue, ComPtr<ID3D12Fence
 
 // ============================================================================
 
+void flush(ComPtr<ID3D12CommandQueue> commandQueue, ComPtr<ID3D12Fence> fence, uint64_t& value, HANDLE event)
+{
+  auto signalValue = signalFence(commandQueue, fence, value);
+  waitFence(fence, signalValue, event, milliseconds::max());
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -451,8 +470,11 @@ int main()
   auto commandList = createDXCommandList(device, commandAllocator);
   auto fence = createDXFence(device);
   auto fenceEvent = createEvent();
+  uint64_t fenceValue = 0u;
   
   // TODO ...
+
+  flush(commandQueue, fence, fenceValue, fenceEvent);
 
   CloseHandle(fenceEvent);
   destroyWindow(hwnd);
