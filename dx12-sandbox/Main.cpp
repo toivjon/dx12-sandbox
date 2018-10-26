@@ -339,6 +339,21 @@ ComPtr<ID3D12DescriptorHeap> createDXDescriptorHeap(ComPtr<ID3D12Device> device,
 
 // ============================================================================
 
+ComPtr<ID3D12CommandAllocator> createDXCommandAllocator(ComPtr<ID3D12Device> device, D3D12_COMMAND_LIST_TYPE type)
+{
+  // try to create a new command allocator.
+  ComPtr<ID3D12CommandAllocator> allocator;
+  auto result = device->CreateCommandAllocator(type, IID_PPV_ARGS(&allocator));
+  if (FAILED(result)) {
+    std::cout << "device->CreateCommandAllocator: " << result << std::endl;
+    throw new std::runtime_error("Failed to create command allocator");
+  }
+
+  return allocator;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -352,6 +367,7 @@ int main()
   auto commandQueue = createDXCommandQueue(device);
   auto swapChain = createDXGISwapChain(hwnd, commandQueue);
   auto descriptorHeap = createDXDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+  auto commandAllocator = createDXCommandAllocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
   
   // TODO ...
 
