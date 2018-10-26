@@ -384,6 +384,19 @@ ComPtr<ID3D12Fence> createDXFence(ComPtr<ID3D12Device> device)
 
 // ============================================================================
 
+HANDLE createEvent()
+{
+  auto event = CreateEvent(nullptr, false, false, nullptr);
+  if (event == nullptr) {
+    std::cout << "CreateEvent failed" << std::endl;
+    throw new std::runtime_error("Failed to create new event");
+  }
+
+  return event;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -400,9 +413,11 @@ int main()
   auto commandAllocator = createDXCommandAllocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
   auto commandList = createDXCommandList(device, commandAllocator);
   auto fence = createDXFence(device);
+  auto fenceEvent = createEvent();
   
   // TODO ...
 
+  CloseHandle(fenceEvent);
   destroyWindow(hwnd);
   unregisterWindowClass();
   return 0;
