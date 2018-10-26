@@ -354,6 +354,21 @@ ComPtr<ID3D12CommandAllocator> createDXCommandAllocator(ComPtr<ID3D12Device> dev
 
 // ============================================================================
 
+ComPtr<ID3D12GraphicsCommandList> createDXCommandList(ComPtr<ID3D12Device> device, ComPtr<ID3D12CommandAllocator> commandAllocator)
+{
+  // try to create a new command list.
+  ComPtr<ID3D12GraphicsCommandList> commandList;
+  auto result = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList));
+  if (FAILED(result)) {
+    std::cout << "device->CreateCommandList: " << result << std::endl;
+    throw new std::runtime_error("Failed to create command list");
+  }
+
+  return commandList;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -368,6 +383,7 @@ int main()
   auto swapChain = createDXGISwapChain(hwnd, commandQueue);
   auto descriptorHeap = createDXDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   auto commandAllocator = createDXCommandAllocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+  auto commandList = createDXCommandList(device, commandAllocator);
   
   // TODO ...
 
