@@ -57,6 +57,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:
       PostQuitMessage(0);
       break;
+    case WM_KEYDOWN:
+      switch (wParam) {
+        case VK_ESCAPE:
+          PostQuitMessage(0);
+          break;
+      }
+      break;
   }
   return DefWindowProc(hwnd, msg, wParam, lParam);
 }
@@ -471,8 +478,18 @@ int main()
   auto fence = createDXFence(device);
   auto fenceEvent = createEvent();
   uint64_t fenceValue = 0u;
+
+  // set the window visible.
+  ShowWindow(hwnd, SW_SHOW);
   
-  // TODO ...
+  // operate WINAPI cycle which runs until an exit message is received.
+  MSG msg = {};
+  while (msg.message != WM_QUIT) {
+    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+      TranslateMessage(&msg);
+      DispatchMessage(&msg);
+    }
+  }
 
   flush(commandQueue, fence, fenceValue, fenceEvent);
 
