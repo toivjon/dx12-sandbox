@@ -417,6 +417,23 @@ void waitFence(ComPtr<ID3D12Fence> fence, uint64_t fenceValue, HANDLE event, mil
 
 // ============================================================================
 
+uint64_t signalFence(ComPtr<ID3D12CommandQueue> commandQueue, ComPtr<ID3D12Fence> fence, uint64_t& value)
+{
+  // increment the fence value to indicate a new signal.
+  uint64_t signalValue = ++value;
+
+  // try to signal the fence with the incremented signal value.
+  auto result = commandQueue->Signal(fence.Get(), signalValue);
+  if (FAILED(result)) {
+    std::cout << "commandQueue->Signal: " << result << std::endl;
+    throw new std::runtime_error("Failed to signal fence");
+  }
+
+  return signalValue;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
