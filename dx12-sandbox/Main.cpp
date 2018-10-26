@@ -460,6 +460,36 @@ void flush(ComPtr<ID3D12CommandQueue> commandQueue, ComPtr<ID3D12Fence> fence, u
 
 // ============================================================================
 
+std::vector<ComPtr<ID3D12Resource>> createRenderTargets(ComPtr<ID3D12Device> device, ComPtr<IDXGISwapChain4> swapChain, ComPtr<ID3D12DescriptorHeap> descriptorHeap)
+{
+  // get the size of the render target descriptor and the position where heap starts.
+  auto descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+  auto rtvHeap = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+
+  // construct a new render tager view for each buffer.
+  std::vector<ComPtr<ID3D12Resource>> renderTargets;
+  for (int i = 0; i < BUFFER_COUNT; i++) {
+    // get a buffer pointer from the swap chain.
+    ComPtr<ID3D12Resource> buffer;
+    auto result = swapChain->GetBuffer(i, IID_PPV_ARGS(&buffer));
+    if (FAILED(result)) {
+      std::cout << "swapChain->GetBuffer: " << result << std::endl;
+      throw new std::runtime_error("Failed to get buffer pointer from the swap chain");
+    }
+
+    // create a new render target view and add it into the buffer list.
+    device->CreateRenderTargetView(buffer.Get(), nullptr, rtvHeap);
+    renderTargets.push_back(buffer);
+
+    // proceed rtv heap pointer to point on the next descriptor.
+    rtvHeap.ptr += descriptorSize;
+  }
+
+  return renderTargets;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -473,6 +503,7 @@ int main()
   auto commandQueue = createDXCommandQueue(device);
   auto swapChain = createDXGISwapChain(hwnd, commandQueue);
   auto descriptorHeap = createDXDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+  auto renderTargets = createRenderTargets(device, swapChain, descriptorHeap);
   auto commandAllocator = createDXCommandAllocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
   auto commandList = createDXCommandList(device, commandAllocator);
   auto fence = createDXFence(device);
