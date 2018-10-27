@@ -64,8 +64,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
           break;
       }
       break;
+    default:
+      return DefWindowProc(hwnd, msg, wParam, lParam);
   }
-  return DefWindowProc(hwnd, msg, wParam, lParam);
+  return 0;
 }
 
 // ============================================================================
@@ -359,17 +361,20 @@ ComPtr<ID3D12DescriptorHeap> createDXDescriptorHeap(ComPtr<ID3D12Device> device,
 
 // ============================================================================
 
-ComPtr<ID3D12CommandAllocator> createDXCommandAllocator(ComPtr<ID3D12Device> device, D3D12_COMMAND_LIST_TYPE type)
+std::vector<ComPtr<ID3D12CommandAllocator>> createDXCommandAllocators(ComPtr<ID3D12Device> device, D3D12_COMMAND_LIST_TYPE type)
 {
-  // try to create a new command allocator.
-  ComPtr<ID3D12CommandAllocator> allocator;
-  auto result = device->CreateCommandAllocator(type, IID_PPV_ARGS(&allocator));
-  if (FAILED(result)) {
-    std::cout << "device->CreateCommandAllocator: " << result << std::endl;
-    throw new std::runtime_error("Failed to create command allocator");
+  // try to create new command allocators.
+  std::vector<ComPtr<ID3D12CommandAllocator>> commandAllocators;
+  for (int i = 0; i < BUFFER_COUNT; i++) {
+    ComPtr<ID3D12CommandAllocator> allocator;
+    auto result = device->CreateCommandAllocator(type, IID_PPV_ARGS(&allocator));
+    if (FAILED(result)) {
+      std::cout << "device->CreateCommandAllocator: " << result << std::endl;
+      throw new std::runtime_error("Failed to create command allocator");
+    }
+    commandAllocators.push_back(allocator);
   }
-
-  return allocator;
+  return commandAllocators;
 }
 
 // ============================================================================
@@ -382,6 +387,12 @@ ComPtr<ID3D12GraphicsCommandList> createDXCommandList(ComPtr<ID3D12Device> devic
   if (FAILED(result)) {
     std::cout << "device->CreateCommandList: " << result << std::endl;
     throw new std::runtime_error("Failed to create command list");
+  }
+
+  // close the command list to stop recording commands for now.
+  result = commandList->Close();
+  if (FAILED(result)) {
+    std::cout << "commandList->Close: " << result << std::endl;
   }
 
   return commandList;
@@ -504,14 +515,17 @@ int main()
   auto swapChain = createDXGISwapChain(hwnd, commandQueue);
   auto descriptorHeap = createDXDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   auto renderTargets = createRenderTargets(device, swapChain, descriptorHeap);
-  auto commandAllocator = createDXCommandAllocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-  auto commandList = createDXCommandList(device, commandAllocator);
+  auto commandAllocators = createDXCommandAllocators(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+  auto commandList = createDXCommandList(device, commandAllocators[0]);
   auto fence = createDXFence(device);
   auto fenceEvent = createEvent();
   uint64_t fenceValue = 0u;
 
   // set the window visible.
   ShowWindow(hwnd, SW_SHOW);
+
+  // get the index of the currently active back buffer.
+  auto bufferIndex = swapChain->GetCurrentBackBufferIndex();
   
   // operate WINAPI cycle which runs until an exit message is received.
   MSG msg = {};
@@ -520,6 +534,74 @@ int main()
       TranslateMessage(&msg);
       DispatchMessage(&msg);
     }
+    
+    // reset the memory associated with command allocator.
+    auto result = commandAllocators[bufferIndex]->Reset();
+    if (FAILED(result)) {
+      std::cout << "commandAllocator->Reset: " << result << std::endl;
+      throw new std::runtime_error("Command allocator reset failed");
+    }
+
+    // reset the command list.
+    result = commandList->Reset(commandAllocators[bufferIndex].Get(), nullptr);
+    if (FAILED(result)) {
+      std::cout << "commandList->Reset: " << result << std::endl;
+      throw new std::runtime_error("Command list reset failed");
+    }
+    
+    // create a resource barrier to synchronize the back buffer for rendering.
+    D3D12_RESOURCE_BARRIER barrier;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = renderTargets[bufferIndex].Get();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    commandList->ResourceBarrier(1, &barrier);
+    
+    // assign the back buffer as the rendering target.
+    auto rtvHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    auto rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    if (bufferIndex == 1) {
+      rtvHandle.ptr += rtvDescriptorSize;
+    }
+
+    // define the back buffer as the render target.
+    commandList->OMSetRenderTargets(1, &rtvHandle, false, nullptr);
+
+    // clear the render target with the desired color.
+    float clearColor[] = { 0.5f, 0.5f, 0.5f, 0.5f };
+    commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+    // change the back buffer state to transition.
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+    commandList->ResourceBarrier(1, &barrier);
+
+    // close the command list to finalize rendering.
+    result = commandList->Close();
+    if (FAILED(result)) {
+      std::cout << "commandList->Close: " << result << std::endl;
+      throw new std::runtime_error("Failed to close the command list");
+    }
+
+    // submit the command list into the command queue for the execution.
+    std::vector<ID3D12CommandList*> const commandLists = { commandList.Get() };
+    commandQueue->ExecuteCommandLists(1, &commandLists[0]);
+
+    // present the rendered frame to the screen with v-sync.
+    result = swapChain->Present(1, 0);
+    if (FAILED(result)) {
+      std::cout << "swapChain->Present: " << result << std::endl;
+      throw new std::runtime_error("Failed to present swap chain buffer");
+    }
+
+    // wait until the GPU has completed rendering.
+    signalFence(commandQueue, fence, fenceValue);
+    waitFence(fence, fenceValue, fenceEvent, milliseconds::max());
+
+    // proceed to next buffer in a round-robin manner.
+    bufferIndex = (bufferIndex + 1) % BUFFER_COUNT;
   }
 
   flush(commandQueue, fence, fenceValue, fenceEvent);
