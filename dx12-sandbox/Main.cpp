@@ -708,7 +708,7 @@ ComPtr<ID3D12Resource> createVertexBuffer(ComPtr<ID3D12Device> device, ComPtr<ID
     std::cout << "vertexBuffer->Map: " << result << std::endl;
     throw new std::runtime_error("Failed to map vertex buffer memory");
   }
-  memcpy(data, &vertices[0], sizeof(float) * vertices.size());
+  memcpy(data, &vertices[0], sizeof(Vertex) * vertices.size());
   vertexBuffer->Unmap(0, nullptr);
 
   // wait until the provided vertices have been uploaded to GPU.
@@ -756,6 +756,22 @@ int main()
   vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
   vertexBufferView.StrideInBytes = sizeof(Vertex);
   vertexBufferView.SizeInBytes = sizeof(Vertex) * 3;
+
+  // create a viewport definition.
+  D3D12_VIEWPORT viewport = {};
+  viewport.MaxDepth = D3D12_MAX_DEPTH;
+  viewport.MinDepth = D3D12_MIN_DEPTH;
+  viewport.TopLeftX = 0;
+  viewport.TopLeftY = 0;
+  viewport.Width = WIDTH;
+  viewport.Height = HEIGHT;
+
+  // create a scissor rect definition.
+  D3D12_RECT scissorRect = {};
+  scissorRect.left = 0;
+  scissorRect.top = 0;
+  scissorRect.right = LONG_MAX;
+  scissorRect.bottom = LONG_MAX;
   
   // operate WINAPI cycle which runs until an exit message is received.
   MSG msg = {};
@@ -778,6 +794,11 @@ int main()
       std::cout << "commandList->Reset: " << result << std::endl;
       throw new std::runtime_error("Command list reset failed");
     }
+
+    // define rendering instructions for the further commands.
+    commandList->SetGraphicsRootSignature(rootSignature.Get());
+    commandList->RSSetViewports(1, &viewport);
+    commandList->RSSetScissorRects(1, &scissorRect);
     
     // create a resource barrier to synchronize the back buffer for rendering.
     D3D12_RESOURCE_BARRIER barrier;
@@ -802,6 +823,9 @@ int main()
     // clear the render target with the desired color.
     float clearColor[] = { 0.5f, 0.5f, 0.5f, 0.5f };
     commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+    commandList->DrawInstanced(3, 1, 0, 0);
 
     // change the back buffer state to transition.
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
