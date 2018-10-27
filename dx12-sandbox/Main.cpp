@@ -381,11 +381,11 @@ std::vector<ComPtr<ID3D12CommandAllocator>> createDXCommandAllocators(ComPtr<ID3
 
 // ============================================================================
 
-ComPtr<ID3D12GraphicsCommandList> createDXCommandList(ComPtr<ID3D12Device> device, ComPtr<ID3D12CommandAllocator> commandAllocator)
+ComPtr<ID3D12GraphicsCommandList> createDXCommandList(ComPtr<ID3D12Device> device, ComPtr<ID3D12CommandAllocator> commandAllocator, ComPtr<ID3D12PipelineState> state)
 {
   // try to create a new command list.
   ComPtr<ID3D12GraphicsCommandList> commandList;
-  auto result = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList));
+  auto result = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator.Get(), state.Get(), IID_PPV_ARGS(&commandList));
   if (FAILED(result)) {
     std::cout << "device->CreateCommandList: " << result << std::endl;
     throw new std::runtime_error("Failed to create command list");
@@ -663,7 +663,7 @@ int main()
   auto commandAllocators = createDXCommandAllocators(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
   auto rootSignature = createRootSignature(device);
   auto pipelineState = createPipelineState(device, rootSignature);
-  auto commandList = createDXCommandList(device, commandAllocators[0]);
+  auto commandList = createDXCommandList(device, commandAllocators[0], pipelineState);
   auto fence = createDXFence(device);
   auto fenceEvent = createEvent();
   uint64_t fenceValue = 0u;
