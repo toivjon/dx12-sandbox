@@ -20,6 +20,7 @@
 
 // include support for I/O streams.
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <iostream>
 #include <vector>
@@ -47,6 +48,14 @@ static const auto HEIGHT = 600;
 
 // the amount of swap chain buffers.
 static const auto BUFFER_COUNT = 2;
+
+// ============================================================================
+
+struct Vertex
+{
+  std::array<float, 3> position;
+  std::array<float, 4> color;
+};
 
 // ============================================================================
 
@@ -646,6 +655,73 @@ ComPtr<ID3D12PipelineState> createPipelineState(ComPtr<ID3D12Device> device, Com
 
 // ============================================================================
 
+ComPtr<ID3D12Resource> createVertexBuffer(ComPtr<ID3D12Device> device, ComPtr<ID3D12CommandQueue> commandQueue)
+{
+  // construct the required vertices for a simple triangle.
+  std::vector<Vertex> vertices = {
+    {{  0.0f,  0.5f, 0.0f }, { 1.f, 0.f, 0.f, 1.f }},
+    {{  0.5f, -0.5f, 0.0f }, { 0.f, 1.f, 0.f, 1.f }},
+    {{ -0.5f, -0.5f, 0.0f }, { 0.f, 0.f, 1.f, 1.f }}
+  };
+
+  // construct properties for the upload heap.
+  D3D12_HEAP_PROPERTIES heapProperties = {};
+  heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+  heapProperties.CreationNodeMask = 1;
+  heapProperties.VisibleNodeMask = 1;
+  heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+  // construct a descriptor for a vertex buffer (derived from CD3DX12_RESOURCE_DESC).
+  D3D12_RESOURCE_DESC resourceDescriptor = {};
+  resourceDescriptor.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+  resourceDescriptor.Alignment = 0;
+  resourceDescriptor.Width = sizeof(Vertex) * vertices.size();
+  resourceDescriptor.Height = 1;
+  resourceDescriptor.DepthOrArraySize = 1;
+  resourceDescriptor.MipLevels = 1;
+  resourceDescriptor.Format = DXGI_FORMAT_UNKNOWN;
+  resourceDescriptor.SampleDesc.Count = 1;
+  resourceDescriptor.SampleDesc.Quality = 0;
+  resourceDescriptor.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  resourceDescriptor.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+  // allocate a new committed resource for the vertex buffer.
+  ComPtr<ID3D12Resource> vertexBuffer;
+  auto result = device->CreateCommittedResource(
+    &heapProperties,
+    D3D12_HEAP_FLAG_NONE,
+    &resourceDescriptor,
+    D3D12_RESOURCE_STATE_GENERIC_READ,
+    nullptr,
+    IID_PPV_ARGS(&vertexBuffer));
+  if (FAILED(result)) {
+    std::cout << "device->CreateCommittedResource: " << result << std::endl;
+    throw new std::runtime_error("Failed to create committed resource");
+  }
+
+  // assign the vertices into the vertex buffer.
+  unsigned char* data(0);
+  D3D12_RANGE range = {};
+  result = vertexBuffer->Map(0, &range, reinterpret_cast<void**>(&data));
+  if (FAILED(result)) {
+    std::cout << "vertexBuffer->Map: " << result << std::endl;
+    throw new std::runtime_error("Failed to map vertex buffer memory");
+  }
+  memcpy(data, &vertices[0], sizeof(float) * vertices.size());
+  vertexBuffer->Unmap(0, nullptr);
+
+  // wait until the provided vertices have been uploaded to GPU.
+  auto fence = createDXFence(device);
+  uint64_t fenceValue = 1;
+  auto fenceEvent = createEvent();
+  flush(commandQueue, fence, fenceValue, fenceEvent);
+
+  return vertexBuffer;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -664,6 +740,7 @@ int main()
   auto rootSignature = createRootSignature(device);
   auto pipelineState = createPipelineState(device, rootSignature);
   auto commandList = createDXCommandList(device, commandAllocators[0], pipelineState);
+  auto vertexBuffer = createVertexBuffer(device, commandQueue);
   auto fence = createDXFence(device);
   auto fenceEvent = createEvent();
   uint64_t fenceValue = 0u;
@@ -673,6 +750,12 @@ int main()
 
   // get the index of the currently active back buffer.
   auto bufferIndex = swapChain->GetCurrentBackBufferIndex();
+
+  // create a vertex buffer view from the vertex buffer definitionss.
+  D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+  vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
+  vertexBufferView.StrideInBytes = sizeof(Vertex);
+  vertexBufferView.SizeInBytes = sizeof(Vertex) * 3;
   
   // operate WINAPI cycle which runs until an exit message is received.
   MSG msg = {};
