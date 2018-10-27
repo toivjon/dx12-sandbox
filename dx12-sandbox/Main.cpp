@@ -773,7 +773,7 @@ int main()
     }
 
     // reset the command list.
-    result = commandList->Reset(commandAllocators[bufferIndex].Get(), nullptr);
+    result = commandList->Reset(commandAllocators[bufferIndex].Get(), pipelineState.Get());
     if (FAILED(result)) {
       std::cout << "commandList->Reset: " << result << std::endl;
       throw new std::runtime_error("Command list reset failed");
