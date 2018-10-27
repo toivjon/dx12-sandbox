@@ -501,6 +501,38 @@ std::vector<ComPtr<ID3D12Resource>> createRenderTargets(ComPtr<ID3D12Device> dev
 
 // ============================================================================
 
+ComPtr<ID3D12RootSignature> createRootSignature(ComPtr<ID3D12Device> device)
+{
+  // create a desciptor for the root signature.
+  D3D12_ROOT_SIGNATURE_DESC descriptor = {};
+  descriptor.NumParameters = 0;
+  descriptor.pParameters = nullptr;
+  descriptor.NumStaticSamplers = 0;
+  descriptor.pStaticSamplers = nullptr;
+  descriptor.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+  // try to serialize a new root signature. 
+  ComPtr<ID3DBlob> signature;
+  ComPtr<ID3DBlob> error;
+  auto result = D3D12SerializeRootSignature(&descriptor, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
+  if (FAILED(result)) {
+    std::cout << "D3D12SerializeRootSignature: " << result << std::endl;
+    throw new std::runtime_error("Failed to create root signature");
+  }
+
+  // try to create the new root signature.
+  ComPtr<ID3D12RootSignature> rootSignature;
+  result = device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
+  if (FAILED(result)) {
+    std::cout << "device->CreateRootSignature: " << result << std::endl;
+    throw new std::runtime_error("Failed to create root signature");
+  }
+
+  return rootSignature;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -516,6 +548,7 @@ int main()
   auto descriptorHeap = createDXDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   auto renderTargets = createRenderTargets(device, swapChain, descriptorHeap);
   auto commandAllocators = createDXCommandAllocators(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+  auto rootSignature = createRootSignature(device);
   auto commandList = createDXCommandList(device, commandAllocators[0]);
   auto fence = createDXFence(device);
   auto fenceEvent = createEvent();
