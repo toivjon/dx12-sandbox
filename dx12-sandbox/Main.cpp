@@ -143,7 +143,7 @@ HWND createWindow()
 void destroyWindow(HWND hwnd)
 {
   // try to destroy the given window and check results.
-  if (DestroyWindow(hwnd) == 0) {
+  if (IsWindow(hwnd) && DestroyWindow(hwnd) == 0) {
     std::cout << "DestroyWindow: " << GetLastError() << std::endl;
     throw new std::runtime_error("Window destruction failed");
   }
