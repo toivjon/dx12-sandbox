@@ -16,6 +16,7 @@
 // include the required DirectX headers.
 #include <d3d12.h>
 #include <dxgi1_6.h>
+#include <d3dcompiler.h>
 
 // include support for I/O streams.
 #include <algorithm>
@@ -27,6 +28,7 @@
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "d3dcompiler.lib")
 
 // ============================================================================
 
@@ -533,6 +535,117 @@ ComPtr<ID3D12RootSignature> createRootSignature(ComPtr<ID3D12Device> device)
 
 // ============================================================================
 
+ComPtr<ID3D12PipelineState> createPipelineState(ComPtr<ID3D12Device> device, ComPtr<ID3D12RootSignature> rootSignature)
+{
+  // enable debug flags if debug mode is being used.
+  #if defined(_DEBUG)
+  unsigned int flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+  #else
+  unsigned int flags = 0;
+  #endif
+
+  // try to compile the vertex shader.
+  ComPtr<ID3DBlob> vertexShader;
+  ComPtr<ID3DBlob> error;
+  auto result = D3DCompileFromFile(L"shader.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", flags, 0, &vertexShader, &error);
+  if (FAILED(result)) {
+    std::cout << "D3DCompileFromFile (VS): " << result << std::endl;
+    if (error != nullptr) {
+      std::cout << (char*)error->GetBufferPointer() << std::endl;
+    }
+    throw new std::runtime_error("Failed to compile vertex shader");
+  }
+
+  // try to compile the pixel shader.
+  ComPtr<ID3DBlob> pixelShader;
+  result = D3DCompileFromFile(L"shader.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", flags, 0, &pixelShader, &error);
+  if (FAILED(result)) {
+    std::cout << "D3DCompileFromFile (PS): " << result << std::endl;
+    if (error != nullptr) {
+      std::cout << (char*)error->GetBufferPointer() << std::endl;
+    }
+    throw new std::runtime_error("Failed to compile pixel shader");
+  }
+  
+  // define the layout for the input vertex data.
+  std::vector<D3D12_INPUT_ELEMENT_DESC> inputDescriptor = {
+    {
+      "POSITION",
+      0,
+      DXGI_FORMAT_R32G32B32_FLOAT,
+      0,
+      0,
+      D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+      0
+    },
+    {
+      "COLOR",
+      0,
+      DXGI_FORMAT_R32G32B32A32_FLOAT,
+      0,
+      12,
+      D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA
+    }
+  };
+
+  // create a descriptor for the rasterizer state (derived from CD3DX12_RASTERIZER_DESC(CD3DX12_DEFAULT))
+  D3D12_RASTERIZER_DESC rasterizerDescriptor = {};
+  rasterizerDescriptor.FillMode = D3D12_FILL_MODE_SOLID;
+  rasterizerDescriptor.CullMode = D3D12_CULL_MODE_BACK;
+  rasterizerDescriptor.FrontCounterClockwise = false;
+  rasterizerDescriptor.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+  rasterizerDescriptor.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+  rasterizerDescriptor.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+  rasterizerDescriptor.DepthClipEnable = true;
+  rasterizerDescriptor.MultisampleEnable = false;
+  rasterizerDescriptor.AntialiasedLineEnable = false;
+  rasterizerDescriptor.ForcedSampleCount = 0;
+  rasterizerDescriptor.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+  // create a descriptor for the blend state (derived from CD3DX12_BLEND_DESC(CD3DX12_DEFAULT))
+  D3D12_BLEND_DESC blendDescriptor = {};
+  blendDescriptor.AlphaToCoverageEnable = false;
+  blendDescriptor.IndependentBlendEnable = false;
+  blendDescriptor.RenderTarget[0].BlendEnable = false;
+  blendDescriptor.RenderTarget[0].LogicOpEnable = false;
+  blendDescriptor.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+  blendDescriptor.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+  blendDescriptor.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+  blendDescriptor.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+  blendDescriptor.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+  blendDescriptor.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+  blendDescriptor.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+  blendDescriptor.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+  // create a desciptor for the pipeline state object.
+  D3D12_GRAPHICS_PIPELINE_STATE_DESC descriptor = {};
+  descriptor.InputLayout = { &inputDescriptor[0], inputDescriptor.size() };
+  descriptor.pRootSignature = rootSignature.Get();
+  descriptor.VS = { reinterpret_cast<UINT8*>(vertexShader->GetBufferPointer()), vertexShader->GetBufferSize() };
+  descriptor.PS = { reinterpret_cast<UINT8*>(pixelShader->GetBufferPointer()), pixelShader->GetBufferSize() };
+  descriptor.RasterizerState = rasterizerDescriptor;
+  descriptor.BlendState = blendDescriptor;
+  descriptor.DepthStencilState.DepthEnable = false;
+  descriptor.DepthStencilState.StencilEnable = false;
+  descriptor.SampleMask = UINT_MAX;
+  descriptor.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+  descriptor.NumRenderTargets = 1;
+  descriptor.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+  descriptor.SampleDesc.Count = 1;
+
+  // try to create a new pipelin state with the given descriptor.
+  ComPtr<ID3D12PipelineState> pipelineState;
+  result = device->CreateGraphicsPipelineState(&descriptor, IID_PPV_ARGS(&pipelineState));
+  if (FAILED(result)) {
+    std::cout << "device->CreateGraphicsPipelineState: " << result << std::endl;
+    throw new std::runtime_error("Failed to create a new graphics pipeline state");
+  }
+
+  return pipelineState;
+}
+
+// ============================================================================
+
 int main()
 {
   #if defined(_DEBUG)
@@ -549,6 +662,7 @@ int main()
   auto renderTargets = createRenderTargets(device, swapChain, descriptorHeap);
   auto commandAllocators = createDXCommandAllocators(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
   auto rootSignature = createRootSignature(device);
+  auto pipelineState = createPipelineState(device, rootSignature);
   auto commandList = createDXCommandList(device, commandAllocators[0]);
   auto fence = createDXFence(device);
   auto fenceEvent = createEvent();
