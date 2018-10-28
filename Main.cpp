@@ -3,7 +3,7 @@
 #include <Windows.h>
 #include <wrl.h>
 
-// undefine min macro and use the std::max from the <algorithm>
+// undefine min macro and use the std::min from the <algorithm>
 #if defined(min)
 #undef min
 #endif
