@@ -13,6 +13,9 @@
 #undef max
 #endif
 
+// a helper macro to allow writing shader code as a multiline string.
+#define SHADER(CODE) #CODE
+
 // include the required DirectX headers.
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -552,10 +555,32 @@ ComPtr<ID3D12PipelineState> createPipelineState(ComPtr<ID3D12Device> device, Com
   unsigned int flags = 0;
   #endif
 
+  // the source code for our shaders.
+  auto src = SHADER(
+    struct PSInput
+    {
+      float4 position : SV_POSITION;
+      float4 color : COLOR;
+    };
+
+    PSInput VSMain(float4 position : POSITION, float4 color : COLOR)
+    {
+      PSInput result;
+      result.position = position;
+      result.color = color;
+      return result;
+    }
+
+    float4 PSMain(PSInput input) : SV_TARGET
+    {
+      return input.color;
+    }
+  );
+
   // try to compile the vertex shader.
   ComPtr<ID3DBlob> vertexShader;
   ComPtr<ID3DBlob> error;
-  auto result = D3DCompileFromFile(L"shader.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", flags, 0, &vertexShader, &error);
+  auto result = D3DCompile(src, strlen(src), "", nullptr, nullptr, "VSMain", "vs_5_0", flags, 0, &vertexShader, &error);
   if (FAILED(result)) {
     std::cout << "D3DCompileFromFile (VS): " << result << std::endl;
     if (error != nullptr) {
@@ -566,7 +591,7 @@ ComPtr<ID3D12PipelineState> createPipelineState(ComPtr<ID3D12Device> device, Com
 
   // try to compile the pixel shader.
   ComPtr<ID3DBlob> pixelShader;
-  result = D3DCompileFromFile(L"shader.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", flags, 0, &pixelShader, &error);
+  result = D3DCompile(src, strlen(src), "", nullptr, nullptr, "PSMain", "ps_5_0", flags, 0, &pixelShader, &error);
   if (FAILED(result)) {
     std::cout << "D3DCompileFromFile (PS): " << result << std::endl;
     if (error != nullptr) {
