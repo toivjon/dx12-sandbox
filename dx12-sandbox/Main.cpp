@@ -18,7 +18,6 @@
 #include <dxgi1_6.h>
 #include <d3dcompiler.h>
 
-// include support for I/O streams.
 #include <algorithm>
 #include <array>
 #include <chrono>
